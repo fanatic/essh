@@ -116,20 +116,20 @@ func fetchInstances() []*ec2.Instance {
 func filterInstances(filters []string, instances []*ec2.Instance) []*ec2.Instance {
 	filtered := instances[:0]
 	for _, i := range instances {
-		if instanceHasFilter(i, filters) {
+		if instanceMatchesAllFilters(i, filters) {
 			filtered = append(filtered, i)
 		}
 	}
 	return filtered
 }
 
-func instanceHasFilter(i *ec2.Instance, filters []string) bool {
+func instanceMatchesAllFilters(i *ec2.Instance, filters []string) bool {
 	for _, filter := range filters {
-		if tagsHasFilter(i.Tags, filter) {
-			return true
+		if !tagsHasFilter(i.Tags, filter) {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func tagsHasFilter(tags []*ec2.Tag, filter string) bool {
