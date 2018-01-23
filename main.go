@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -22,8 +21,10 @@ var (
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatalln("Usage: ./essh <filter> [<command>]")
+		fmt.Println("Usage: ./essh <filter> [<filter>...] [ -- <command>]")
+		os.Exit(1)
 	}
+	filters, command := ParseArgs(os.Args[1:])
 
 	// Grab our instances
 	instances := fetchInstances()
@@ -49,7 +50,7 @@ func main() {
 	// }
 
 	// Filter by argument (env, region, zone, app)
-	filtered := filterInstances(os.Args[1], instances)
+	filtered := filterInstances(filters, instances)
 
 	if len(filtered) == 0 {
 		fmt.Println("No match found")
@@ -57,13 +58,13 @@ func main() {
 	}
 
 	// One result and no args - exec ssh and give control back to the user
-	if len(os.Args) == 2 && len(filtered) == 1 {
+	if command == nil && len(filtered) == 1 {
 		interactive(filtered[0])
 		return
 	}
 
 	// If command is present, execute on all
-	if len(os.Args) > 2 {
+	if len(command) > 0 {
 		names := []string{}
 		for _, i := range filtered {
 			names = append(names, instanceTag(i, "Name"))
@@ -73,7 +74,7 @@ func main() {
 
 		for _, i := range filtered {
 			fmt.Printf("\n=== %s\n", instanceTag(i, "Name"))
-			allArgs := append([]string{*i.PrivateIpAddress}, os.Args[1:]...)
+			allArgs := append([]string{*i.PrivateIpAddress}, command...)
 			cmd := exec.Command(cmd, append(args, allArgs...)...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
@@ -102,7 +103,7 @@ func fetchInstances() []*ec2.Instance {
 	resp, err := ec2svc.DescribeInstances(params)
 	if err != nil {
 		fmt.Println("there was an error listing instances in", err.Error())
-		log.Fatal(err.Error())
+		os.Exit(1)
 	}
 
 	instances := []*ec2.Instance{}
@@ -112,15 +113,23 @@ func fetchInstances() []*ec2.Instance {
 	return instances
 }
 
-func filterInstances(filter string, instances []*ec2.Instance) []*ec2.Instance {
+func filterInstances(filters []string, instances []*ec2.Instance) []*ec2.Instance {
 	filtered := instances[:0]
 	for _, i := range instances {
-		if tagsHasFilter(i.Tags, filter) {
+		if instanceHasFilter(i, filters) {
 			filtered = append(filtered, i)
-			continue
 		}
 	}
 	return filtered
+}
+
+func instanceHasFilter(i *ec2.Instance, filters []string) bool {
+	for _, filter := range filters {
+		if tagsHasFilter(i.Tags, filter) {
+			return true
+		}
+	}
+	return false
 }
 
 func tagsHasFilter(tags []*ec2.Tag, filter string) bool {
@@ -174,4 +183,23 @@ func confirm() {
 
 func String(str string) *string {
 	return &str
+}
+
+func ParseArgs(args []string) (filters []string, command []string) {
+	if len(args) == 0 {
+		return
+	}
+
+	isCommand := false
+	for _, a := range args {
+		if isCommand {
+			command = append(command, a)
+		} else if a == "--" {
+			isCommand = true
+		} else {
+			filters = append(filters, a)
+		}
+	}
+
+	return
 }
