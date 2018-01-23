@@ -74,9 +74,11 @@ func main() {
 		for _, i := range filtered {
 			fmt.Printf("\n=== %s\n", instanceTag(i, "Name"))
 			allArgs := append([]string{*i.PrivateIpAddress}, os.Args[1:]...)
-			err := exec.Command(cmd, append(args, allArgs...)...).Run()
-			if err != nil {
-				log.Fatalf("error executing command: %s", err.Error())
+			cmd := exec.Command(cmd, append(args, allArgs...)...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				fmt.Printf("error executing command: %s\n", err.Error())
 			}
 		}
 		return
@@ -166,7 +168,7 @@ func giveChoice(filtered []*ec2.Instance) *ec2.Instance {
 
 func confirm() {
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Println("Are you sure you want to run this on these nodes? Ctrl+C to cancel?")
+	fmt.Print("Are you sure you want to run this on these nodes? Ctrl+C to cancel?")
 	reader.ReadString('\n')
 }
 
