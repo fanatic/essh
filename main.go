@@ -152,7 +152,7 @@ func instanceTag(i *ec2.Instance, key string) string {
 
 func interactive(i *ec2.Instance) {
 	allArgs := append([]string{cmd}, args...)
-	syscall.Exec(cmd, append(allArgs, *i.PrivateIpAddress), []string{})
+	syscall.Exec(cmd, append(allArgs, *i.PrivateIpAddress), os.Environ())
 }
 
 func giveChoice(filtered []*ec2.Instance) *ec2.Instance {
