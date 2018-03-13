@@ -10,13 +10,16 @@ import (
 	"syscall"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+
 )
 
 var (
 	cmd  = "/usr/bin/sudo"
 	args = []string{"-u", "ec2-user", "ssh"}
+	roles = []string{""}
 )
 
 func main() {
@@ -91,7 +94,6 @@ func main() {
 }
 
 func fetchInstances() []*ec2.Instance {
-	ec2svc := ec2.New(session.New())
 	params := &ec2.DescribeInstancesInput{
 		Filters: []*ec2.Filter{
 			{
@@ -100,15 +102,27 @@ func fetchInstances() []*ec2.Instance {
 			},
 		},
 	}
-	resp, err := ec2svc.DescribeInstances(params)
-	if err != nil {
-		fmt.Println("there was an error listing instances in", err.Error())
-		os.Exit(1)
-	}
-
 	instances := []*ec2.Instance{}
-	for idx := range resp.Reservations {
-		instances = append(resp.Reservations[idx].Instances, instances...)
+
+	for _, role := range roles {
+		ec2svc := ec2.New(session.New())
+		if role != "" {
+			sess := session.New()
+			creds := stscreds.NewCredentials(sess, role, func(p *stscreds.AssumeRoleProvider) {
+				p.ExternalID = aws.String("dev-to-prod-account-bastion-essh")
+			})
+			ec2svc = ec2.New(sess, &aws.Config{Credentials: creds})
+		}
+
+		resp, err := ec2svc.DescribeInstances(params)
+		if err != nil {
+			fmt.Println("there was an error listing instances in", err.Error())
+			os.Exit(1)
+		}
+
+		for idx := range resp.Reservations {
+			instances = append(resp.Reservations[idx].Instances, instances...)
+		}
 	}
 	return instances
 }
